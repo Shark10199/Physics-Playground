@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="icon" href="./favicon.png" type="image/png" />
+    <link rel="icon" href="./favicon.ico" type="image/x-icon" />
+    <title>Physics Playground</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body,
+      html {
+        margin: 0;
+        overflow: hidden;
+        font-size: 16px;
+      }
+      @media (max-width: 768px) {
+        body,
+        html {
+          font-size: 14px;
+        }
+        button {
+          width: 100%;
+          padding: 10px;
+        }
+      }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.14.2/matter.min.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        var Engine = Matter.Engine,
+          Render = Matter.Render,
+          World = Matter.World,
+          Bodies = Matter.Bodies,
+          Mouse = Matter.Mouse,
+          MouseConstraint = Matter.MouseConstraint,
+          webpageWidth = window.innerWidth,
+          webpageHeight = window.innerHeight,
+          engine = Engine.create(),
+          render = Render.create({
+            element: document.getElementById("matter-js"),
+            engine: engine,
+            options: { width: webpageWidth, height: webpageHeight },
+          }),
+          borderHorizontalWidth = webpageWidth + 2 * 10,
+          borderVerticalHeight = webpageHeight + 2 * 10;
+
+        function calculateBlockSize() {
+          var screenWidth = window.innerWidth;
+          var sizeMultiplier = screenWidth > 768 ? 1 : 0.5;
+          return 80 * sizeMultiplier;
+        }
+
+        World.add(engine.world, [
+          Bodies.rectangle(
+            webpageWidth / 2,
+            webpageHeight - 20,
+            borderHorizontalWidth,
+            50,
+            {
+              isStatic: true,
+            }
+          ),
+          Bodies.rectangle(webpageWidth / 2, -10, borderHorizontalWidth, 50, {
+            isStatic: true,
+          }),
+          Bodies.rectangle(
+            webpageWidth + 10,
+            webpageHeight / 2,
+            50,
+            borderVerticalHeight,
+            { isStatic: true }
+          ),
+          Bodies.rectangle(-10, webpageHeight / 2, 50, borderVerticalHeight, {
+            isStatic: true,
+          }),
+        ]);
+
+        var mouse = Mouse.create(render.canvas),
+          mouseConstraint = MouseConstraint.create(engine, {
+            mouse: mouse,
+            constraint: { render: { visible: false } },
+          });
+
+        World.add(engine.world, mouseConstraint);
+
+        var maxBodies = 100,
+          bodies = [],
+          bouncyBlocksEnabled = false,
+          bouncinessStrength = 0.5;
+
+        function spawnNewBlock() {
+          if (bodies.length >= maxBodies) {
+            World.remove(engine.world, bodies.shift());
+          }
+          var x = Math.random() * webpageWidth,
+            y = Math.random() * webpageHeight,
+            newBlock = Bodies.rectangle(
+              x,
+              y,
+              calculateBlockSize(),
+              calculateBlockSize(),
+              {
+                restitution: bouncyBlocksEnabled ? bouncinessStrength : 0,
+              }
+            );
+          World.add(engine.world, [newBlock]), bodies.push(newBlock);
+        }
+
+        function spawnNewRectangle() {
+          if (bodies.length >= maxBodies) {
+            World.remove(engine.world, bodies.shift());
+          }
+          var x = Math.random() * webpageWidth,
+            y = Math.random() * webpageHeight,
+            rectangleWidth = calculateBlockSize() * 2,
+            rectangleHeight = calculateBlockSize(),
+            newRectangle = Bodies.rectangle(
+              x,
+              y,
+              rectangleWidth,
+              rectangleHeight,
+              { restitution: bouncyBlocksEnabled ? bouncinessStrength : 0 }
+            );
+          World.add(engine.world, [newRectangle]), bodies.push(newRectangle);
+        }
+
+        function teleportBlock(block) {
+          var x = block.position.x,
+            y = block.position.y;
+          x > webpageWidth
+            ? Matter.Body.setPosition(block, { x: -block.bounds.max.x, y: y })
+            : x < 0
+            ? Matter.Body.setPosition(block, {
+                x: webpageWidth + block.bounds.max.x,
+                y: y,
+              })
+            : y > webpageHeight
+            ? Matter.Body.setPosition(block, { x: x, y: -block.bounds.max.y })
+            : y < 0 &&
+              Matter.Body.setPosition(block, {
+                x: x,
+                y: webpageHeight + block.bounds.max.y,
+              });
+        }
+
+        document.addEventListener("click", function (event) {
+          if (event.target === document.getElementById("spawnButton")) {
+            spawnNewBlock();
+          } else if (
+            event.target === document.getElementById("spawnRectangleButton")
+          ) {
+            spawnNewRectangle();
+          } else if (
+            event.target === document.getElementById("toggleBouncyButton")
+          ) {
+            (bouncyBlocksEnabled = !bouncyBlocksEnabled),
+              updateBouncyButtonLabel();
+          }
+        });
+
+        function updateBouncyButtonLabel() {
+          var toggleBouncyButton =
+            document.getElementById("toggleBouncyButton");
+          toggleBouncyButton.innerText = bouncyBlocksEnabled
+            ? "Disable Bouncy Blocks"
+            : "Enable Bouncy Blocks";
+        }
+
+        updateBouncyButtonLabel();
+
+        var gravityStrengthInput = document.getElementById("gravityStrength"),
+          gravityValueDisplay = document.getElementById("gravityValue");
+
+        function updateGravityStrength() {
+          var gravityStrength = parseFloat(gravityStrengthInput.value);
+          (engine.world.gravity.y = 1 * gravityStrength),
+            (gravityValueDisplay.innerText = gravityStrength);
+        }
+
+        gravityStrengthInput.addEventListener("input", updateGravityStrength),
+          updateGravityStrength();
+
+        var bouncinessSlider = document.getElementById("bouncinessSlider"),
+          bouncinessValueDisplay = document.getElementById("bouncinessValue");
+
+        function updateBouncinessStrength() {
+          (bouncinessStrength = parseFloat(bouncinessSlider.value)),
+            (bouncinessValueDisplay.innerText = bouncinessStrength);
+        }
+
+        bouncinessSlider.addEventListener("input", updateBouncinessStrength),
+          updateBouncinessStrength();
+
+        function updateEngine() {
+          Engine.update(engine);
+          for (var i = 0; i < bodies.length; i++) {
+            teleportBlock(bodies[i]);
+          }
+          requestAnimationFrame(updateEngine);
+        }
+
+        updateEngine(), Render.run(render);
+      });
+    </script>
+  </head>
+  <body>
+    <label for="gravityStrength">Gravity Strength:</label>
+    <input
+      type="range"
+      id="gravityStrength"
+      min="0"
+      max="2"
+      step="0.1"
+      value="1"
+    />
+    <span id="gravityValue">1</span>
+    <button id="spawnButton">Spawn Square Block</button>
+    <button id="spawnRectangleButton">Spawn Rectangle Block</button>
+    <button id="toggleBouncyButton">Enable Bouncy Blocks</button>
+    <label for="bouncinessSlider">Bounciness Strength:</label>
+    <input
+      type="range"
+      id="bouncinessSlider"
+      min="0"
+      max="2"
+      step="0.1"
+      value="0.5"
+    />
+    <span id="bouncinessValue">0.5</span>
+    <div id="matter-js"></div>
+  </body>
+</html>
